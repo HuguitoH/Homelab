@@ -1,0 +1,11 @@
+services:
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    container_name: ntfy
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - /opt/docker/ntfy:/var/lib/ntfy
+    command:
+      - serve
