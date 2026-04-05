@@ -4,6 +4,7 @@ services:
     image: henrygd/beszel:latest
     container_name: beszel
     restart: unless-stopped
+    ports:
       - "8090:8090"
     volumes:
       - /opt/docker/beszel:/beszel_data
