@@ -36,7 +36,7 @@ jobs:
           echo "PR number: $PR_NUMBER"
 
           if [ -n "$PR_NUMBER" ]; then
-            gh pr merge $PR_NUMBER --auto --squash --delete-branch=false
+            gh pr merge $PR_NUMBER --auto --merge --delete-branch=false
             echo "Auto-merge enabled on PR #$PR_NUMBER"
           else
             echo "Could not determine PR number"

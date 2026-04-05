@@ -92,7 +92,7 @@ gum style --foreground 82 "PR: $PR_URL"
 
 PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
 if [ -n "$PR_NUMBER" ]; then
-  gh pr merge $PR_NUMBER --auto --squash --delete-branch=false
+  gh pr merge $PR_NUMBER --auto --merge --delete-branch=false
   gum style --foreground 82 "Auto-merge enabled on PR #$PR_NUMBER"
 fi
 
