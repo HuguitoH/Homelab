@@ -91,7 +91,7 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-  
+
   glances:
     image: nicolargo/glances:latest
     container_name: glances
@@ -103,3 +103,21 @@ services:
     environment:
       - GLANCES_OPT=-w
     pid: host
+
+  diun:
+    image: crazymax/diun:latest
+    container_name: diun
+    restart: unless-stopped
+    volumes:
+      - /opt/docker/diun:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Europe/Madrid
+      - LOG_LEVEL=info
+      - DIUN_WATCH_WORKERS=20
+      - DIUN_WATCH_SCHEDULE=0 8 * * 1
+      - DIUN_WATCH_JITTER=30s
+      - DIUN_NOTIF_NTFY_ENDPOINT=https://ntfy.hugohhm.dev
+      - DIUN_NOTIF_NTFY_TOPIC=hugohhm-homelab
+      - DIUN_PROVIDERS_DOCKER=true
+      - DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT=true
