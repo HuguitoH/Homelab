@@ -21,7 +21,7 @@ services:
       LISTEN: 45876
       KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO+5mw+he1EZGndq8B9sjbQa8PWVU9uZj+knYq49waNY"
       TOKEN: "fbe-ab4dfd15c8-ce92-f5c86e7348"
-      HUB_URL: "http://192.168.1.100:8090"
+      HUB_URL: "http://${SERVER_IP}:8090"
 
   prometheus:
     image: prom/prometheus:latest

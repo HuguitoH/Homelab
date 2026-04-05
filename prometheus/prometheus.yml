@@ -1,3 +1,6 @@
+# Note: IP is static (192.168.1.100) and intentionally hardcoded.
+# Prometheus does not support environment variable substitution natively.
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
