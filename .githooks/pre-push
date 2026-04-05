@@ -8,7 +8,14 @@ if [ "$BRANCH" != "develop" ]; then
 fi
 
 # Read push refs from stdin
-read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA
+# Read push refs from stdin
+read LOCAL_REF LOCAL_SHA_STDIN REMOTE_REF REMOTE_SHA
+
+# Use HEAD as LOCAL_SHA (stdin may be consumed by gum)
+LOCAL_SHA=$(git rev-parse HEAD)
+if [ -z "$REMOTE_SHA" ]; then
+  REMOTE_SHA=$REMOTE_SHA_STDIN
+fi
 
 LAST_PR_SHA_FILE="$(git rev-parse --show-toplevel)/.last-pr-sha"
 
