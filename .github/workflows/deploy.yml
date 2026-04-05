@@ -22,6 +22,17 @@ jobs:
           docker compose -f docker-compose/base.yml --env-file /home/hugoh/homelab/.env up -d
           docker compose -f docker-compose/monitoring.yml --env-file /home/hugoh/homelab/.env up -d
           docker compose -f docker-compose/services.yml --env-file /home/hugoh/homelab/.env up -d
+      
+      - name: Health check
+        run: |
+          sleep 15
+          curl -sf https://nginx.hugohhm.dev > /dev/null || exit 1
+          curl -sf https://grafana.hugohhm.dev > /dev/null || exit 1
+          curl -sf https://beszel.hugohhm.dev > /dev/null || exit 1
+          curl -sf https://uptime-kuma.hugohhm.dev > /dev/null || exit 1
+          curl -sf https://homepage.hugohhm.dev > /dev/null || exit 1
+          curl -sf https://vaultwarden.hugohhm.dev > /dev/null || exit 1
+          curl -sf https://ntfy.hugohhm.dev > /dev/null || exit 1
 
       - name: Notify success
         if: success()
@@ -30,5 +41,6 @@ jobs:
 
       - name: Notify failure
         if: failure()
+
         run: |
           curl -d "✖  Deploy fallido - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
