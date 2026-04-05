@@ -11,7 +11,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create or update PR
+      - name: Create PR if not exists
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -26,7 +26,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr merge develop \
+          PR_NUMBER=$(gh pr list --head develop --base main --json number --jq '.[0].number')
+          echo "PR number: $PR_NUMBER"
+          gh pr merge $PR_NUMBER \
             --auto \
             --squash \
             --delete-branch=false
