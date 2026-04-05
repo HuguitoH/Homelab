@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# Ensure gh is in PATH
+export PATH="/usr/bin:/usr/local/bin:$PATH"
+
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" != "develop" ]; then
+  exit 0
+fi
+
+# Verificar que hay commits nuevos respecto a main
+COMMITS=$(git log origin/main..HEAD --pretty=format:"- %s" --no-merges)
+if [ -z "$COMMITS" ]; then
+  exit 0
+fi
+
+echo ""
+gum style \
+  --border rounded \
+  --border-foreground 99 \
+  --padding "1 2" \
+  --margin "1 0" \
+  "Creating PR: develop → main"
+
+echo "Commits in this push:"
+echo "$COMMITS"
+echo ""
+
+# Tipo de cambio
+TYPE=$(gum choose \
+  --header "Type of change:" \
+  "feat — new feature" \
+  "fix — bug fix" \
+  "chore — maintenance" \
+  "docs — documentation" \
+  "refactor — code refactor")
+
+TYPE=$(echo "$TYPE" | cut -d' ' -f1)
+
+# Título
+TITLE=$(gum input \
+  --placeholder "PR title..." \
+  --prompt "$TYPE: ")
+
+# Qué cambió
+WHAT=$(gum write \
+  --placeholder "What changed? (Ctrl+D when done)" \
+  --header "What changed:")
+
+# Por qué
+WHY=$(gum input \
+  --placeholder "Why this change?" \
+  --prompt "> ")
+
+BODY="## What
+$WHAT
+
+## Why
+$WHY
+
+## Commits
+$COMMITS
+
+---
+*Auto-created by pre-push hook*"
+
+# Preview
+echo ""
+gum style \
+  --border rounded \
+  --border-foreground 212 \
+  --padding "1 2" \
+  "$(echo -e "Title: $TYPE: $TITLE\n\n$BODY")"
+echo ""
+
+# Confirmar
+gum confirm "Create PR and push?" || exit 1
+
+# Crear PR
+PR_URL=$(gh pr create \
+  --base main \
+  --head develop \
+  --title "$TYPE: $TITLE" \
+  --body "$BODY" 2>&1) || true
+
+if echo "$PR_URL" | grep -q "already exists"; then
+  gum style --foreground 214 "PR already exists — updating"
+  PR_URL=$(gh pr list --head develop --base main --state open --json url --jq '.[0].url')
+fi
+
+gum style --foreground 82 "PR: $PR_URL"
+
+PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
+if [ -n "$PR_NUMBER" ]; then
+  gh pr merge $PR_NUMBER --auto --squash --delete-branch=false
+  gum style --foreground 82 "Auto-merge enabled on PR #$PR_NUMBER"
+fi
+
+echo ""
+exit 0
