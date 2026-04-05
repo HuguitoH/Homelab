@@ -11,24 +11,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create PR if not exists
+      - name: Create PR and enable auto-merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Create PR — ignore error if already exists
           gh pr create \
             --base main \
             --head develop \
             --title "chore: sync develop → main" \
             --body "Automated PR — triggered by push to develop." \
-            || echo "PR already exists"
+            2>/dev/null || true
 
-      - name: Enable auto-merge
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_NUMBER=$(gh pr list --head develop --base main --json number --jq '.[0].number')
-          echo "PR number: $PR_NUMBER"
-          gh pr merge $PR_NUMBER \
-            --auto \
-            --squash \
-            --delete-branch=false
+          # Wait for GitHub to register the PR
+          sleep 5
+
+          # Get PR number and enable auto-merge
+          PR_NUMBER=$(gh pr list --head develop --base main --state open --json number --jq '.[0].number')
+          
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Enabling auto-merge on PR #$PR_NUMBER"
+            gh pr merge $PR_NUMBER --auto --squash --delete-branch=false
+          else
+            echo "No open PR found — may already be merged"
+          fi
