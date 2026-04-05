@@ -7,6 +7,9 @@ if [ "$BRANCH" != "develop" ]; then
   exit 0
 fi
 
+# Fetch latest main before comparing
+git fetch origin main --quiet 2>/dev/null
+
 # Commits not yet in main — filter merge commits
 COMMITS=$(git log origin/main..HEAD --pretty=format:"- %s" --no-merges | grep -v "sync develop → main")
 
