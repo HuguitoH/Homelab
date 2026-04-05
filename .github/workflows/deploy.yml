@@ -13,22 +13,22 @@ jobs:
 
       - name: Validate Docker Compose files
         run: |
-          docker compose -f docker-compose/base.yml config --quiet
-          docker compose -f docker-compose/monitoring.yml config --quiet
-          docker compose -f docker-compose/services.yml config --quiet
+          docker compose -f docker-compose/base.yml --env-file .env config --quiet
+          docker compose -f docker-compose/monitoring.yml --env-file .env config --quiet
+          docker compose -f docker-compose/services.yml --env-file .env config --quiet
 
       - name: Deploy
         run: |
-          docker compose -f docker-compose/base.yml up -d
-          docker compose -f docker-compose/monitoring.yml up -d
-          docker compose -f docker-compose/services.yml up -d
+          docker compose -f docker-compose/base.yml --env-file .env up -d
+          docker compose -f docker-compose/monitoring.yml --env-file .env up -d
+          docker compose -f docker-compose/services.yml --env-file .env up -d
 
       - name: Notify success
         if: success()
         run: |
-          curl -d "Deploy exitoso - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
+          curl -d "✔  Deploy exitoso - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
 
       - name: Notify failure
         if: failure()
         run: |
-          curl -d "Deploy fallido - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
+          curl -d "✖  Deploy fallido - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
