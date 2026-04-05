@@ -13,9 +13,9 @@ jobs:
 
       - name: Validate Docker Compose files
         run: |
-          docker compose -f docker-compose/base.yml --env-file .env config --quiet
-          docker compose -f docker-compose/monitoring.yml --env-file .env config --quiet
-          docker compose -f docker-compose/services.yml --env-file .env config --quiet
+          docker compose -f docker-compose/base.yml --env-file /home/hugoh/homelab/.env config --quiet
+          docker compose -f docker-compose/monitoring.yml --env-file /home/hugoh/homelab/.env config --quiet
+          docker compose -f docker-compose/services.yml --env-file /home/hugoh/homelab/.env config --quiet
 
       - name: Deploy
         run: |
