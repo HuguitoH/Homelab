@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,27 +17,18 @@ jobs:
           docker compose -f docker-compose/monitoring.yml config --quiet
           docker compose -f docker-compose/services.yml config --quiet
 
-      - name: Deploy to RPi
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.RPi_HOST }}
-          username: ${{ secrets.RPi_USER }}
-          key: ${{ secrets.RPi_SSH_KEY }}
-          script: |
-            cd ~/homelab
-            git pull origin main
-            docker compose -f docker-compose/base.yml up -d
-            docker compose -f docker-compose/monitoring.yml up -d
-            docker compose -f docker-compose/services.yml up -d
+      - name: Deploy
+        run: |
+          docker compose -f docker-compose/base.yml up -d
+          docker compose -f docker-compose/monitoring.yml up -d
+          docker compose -f docker-compose/services.yml up -d
 
       - name: Notify success
         if: success()
         run: |
-          curl -d "Deploy exitoso - $(date)" \
-          https://ntfy.hugohhm.dev/hugohhm-homelab
+          curl -d "Deploy exitoso - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
 
       - name: Notify failure
         if: failure()
         run: |
-          curl -d "Deploy fallido - $(date)" \
-          https://ntfy.hugohhm.dev/hugohhm-homelab
+          curl -d "Deploy fallido - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
