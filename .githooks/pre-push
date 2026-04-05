@@ -7,23 +7,16 @@ if [ "$BRANCH" != "develop" ]; then
   exit 0
 fi
 
-# Get merge base between develop and main
+git fetch origin main --quiet 2>/dev/null
+
 MERGE_BASE=$(git merge-base HEAD origin/main 2>/dev/null)
-
-# Get commits since merge base using ancestry-path
 COMMITS=$(git log ${MERGE_BASE}..HEAD --pretty=format:"- %s" --no-merges --ancestry-path 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
-
-if [ -z "$COMMITS" ]; then
-  # Fallback: commits in last 24h not in main
-  COMMITS=$(git log --since="24 hours ago" --pretty=format:"- %s" --no-merges | grep -v "sync develop → main" | grep -v "^- Merge ")
-fi
 
 if [ -z "$COMMITS" ]; then
   echo "No new commits vs main — skipping PR creation"
   exit 0
 fi
 
-# Commits only in this push
 PUSH_COMMITS=$(git log origin/develop..HEAD --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
 if [ -z "$PUSH_COMMITS" ]; then
   PUSH_COMMITS="$COMMITS"
