@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Ensure gh is in PATH
 export PATH="/usr/bin:/usr/local/bin:$PATH"
 
 BRANCH=$(git branch --show-current)
@@ -8,10 +7,18 @@ if [ "$BRANCH" != "develop" ]; then
   exit 0
 fi
 
-# Verificar que hay commits nuevos respecto a main
-COMMITS=$(git log origin/main..HEAD --pretty=format:"- %s" --no-merges)
+# Commits not yet in main — filter merge commits
+COMMITS=$(git log origin/main..HEAD --pretty=format:"- %s" --no-merges | grep -v "sync develop → main")
+
 if [ -z "$COMMITS" ]; then
+  echo "No new commits vs main — skipping PR creation"
   exit 0
+fi
+
+# Only commits in this push
+PUSH_COMMITS=$(git log origin/develop..HEAD --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main")
+if [ -z "$PUSH_COMMITS" ]; then
+  PUSH_COMMITS="$COMMITS"
 fi
 
 echo ""
@@ -23,10 +30,9 @@ gum style \
   "Creating PR: develop → main"
 
 echo "Commits in this push:"
-echo "$COMMITS"
+echo "$PUSH_COMMITS"
 echo ""
 
-# Tipo de cambio
 TYPE=$(gum choose \
   --header "Type of change:" \
   "feat — new feature" \
@@ -37,17 +43,14 @@ TYPE=$(gum choose \
 
 TYPE=$(echo "$TYPE" | cut -d' ' -f1)
 
-# Título
 TITLE=$(gum input \
   --placeholder "PR title..." \
   --prompt "$TYPE: ")
 
-# Qué cambió
 WHAT=$(gum write \
   --placeholder "What changed? (Ctrl+D when done)" \
   --header "What changed:")
 
-# Por qué
 WHY=$(gum input \
   --placeholder "Why this change?" \
   --prompt "> ")
@@ -59,12 +62,11 @@ $WHAT
 $WHY
 
 ## Commits
-$COMMITS
+$PUSH_COMMITS
 
 ---
 *Auto-created by pre-push hook*"
 
-# Preview
 echo ""
 gum style \
   --border rounded \
@@ -73,10 +75,8 @@ gum style \
   "$(echo -e "Title: $TYPE: $TITLE\n\n$BODY")"
 echo ""
 
-# Confirmar
 gum confirm "Create PR and push?" || exit 1
 
-# Crear PR
 PR_URL=$(gh pr create \
   --base main \
   --head develop \
@@ -84,8 +84,13 @@ PR_URL=$(gh pr create \
   --body "$BODY" 2>&1) || true
 
 if echo "$PR_URL" | grep -q "already exists"; then
-  gum style --foreground 214 "PR already exists — updating"
+  gum style --foreground 214 "PR already exists — updating auto-merge"
   PR_URL=$(gh pr list --head develop --base main --state open --json url --jq '.[0].url')
+fi
+
+if echo "$PR_URL" | grep -q "No commits between"; then
+  gum style --foreground 214 "No new commits vs main — skipping PR"
+  exit 0
 fi
 
 gum style --foreground 82 "PR: $PR_URL"
