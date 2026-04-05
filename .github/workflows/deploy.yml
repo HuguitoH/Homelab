@@ -17,13 +17,20 @@ jobs:
           docker compose -f docker-compose/monitoring.yml --env-file /home/hugoh/homelab/.env config --quiet
           docker compose -f docker-compose/services.yml --env-file /home/hugoh/homelab/.env config --quiet
 
+      - name: Snapshot current state
+        run: |
+          docker ps --format "{{.Names}}" > /tmp/homelab-snapshot.txt
+          echo "Snapshot saved — $(cat /tmp/homelab-snapshot.txt | wc -l) containers running"
+
       - name: Deploy
+        id: deploy
         run: |
           docker compose -f docker-compose/base.yml --env-file /home/hugoh/homelab/.env up -d
           docker compose -f docker-compose/monitoring.yml --env-file /home/hugoh/homelab/.env up -d
           docker compose -f docker-compose/services.yml --env-file /home/hugoh/homelab/.env up -d
-      
+
       - name: Health check
+        id: healthcheck
         run: |
           sleep 15
           curl -sf https://nginx.hugohhm.dev > /dev/null || exit 1
@@ -33,14 +40,25 @@ jobs:
           curl -sf https://homepage.hugohhm.dev > /dev/null || exit 1
           curl -sf https://vaultwarden.hugohhm.dev > /dev/null || exit 1
           curl -sf https://ntfy.hugohhm.dev > /dev/null || exit 1
+          echo "All endpoints healthy"
+
+      - name: Rollback on health check failure
+        if: failure() && steps.healthcheck.outcome == 'failure'
+        run: |
+          echo "Health check failed — rolling back to previous state"
+          cd /home/hugoh/homelab
+          git stash
+          docker compose -f docker-compose/base.yml --env-file /home/hugoh/homelab/.env up -d
+          docker compose -f docker-compose/monitoring.yml --env-file /home/hugoh/homelab/.env up -d
+          docker compose -f docker-compose/services.yml --env-file /home/hugoh/homelab/.env up -d
+          curl -d "🔺 Deploy fallido — rollback ejecutado - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
 
       - name: Notify success
         if: success()
         run: |
-          curl -d "✔  Deploy exitoso - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
+          curl -d "✔️ Deploy exitoso - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
 
       - name: Notify failure
-        if: failure()
-
+        if: failure() && steps.healthcheck.outcome != 'failure'
         run: |
-          curl -d "✖  Deploy fallido - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
+          curl -d "✖️ Deploy fallido en validate/deploy - $(date)" https://ntfy.hugohhm.dev/hugohhm-homelab
