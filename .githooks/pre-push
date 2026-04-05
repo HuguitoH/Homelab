@@ -7,24 +7,29 @@ if [ "$BRANCH" != "develop" ]; then
   exit 0
 fi
 
-# Get merge base between develop and main
-MERGE_BASE=$(git merge-base HEAD origin/main 2>/dev/null)
+# Git passes push info via stdin: local_ref local_sha remote_ref remote_sha
+read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA
 
-# Get commits since merge base using ancestry-path
-COMMITS=$(git log ${MERGE_BASE}..HEAD --pretty=format:"- %s" --no-merges --ancestry-path 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
-
-if [ -z "$COMMITS" ]; then
-  # Fallback: commits in last 24h not in main
-  COMMITS=$(git log --since="24 hours ago" --pretty=format:"- %s" --no-merges | grep -v "sync develop → main" | grep -v "^- Merge ")
+# If remote sha is all zeros, it's a new branch
+if [ "$REMOTE_SHA" = "0000000000000000000000000000000000000000" ]; then
+  REMOTE_SHA=$(git rev-parse origin/main 2>/dev/null || echo "")
 fi
+
+git fetch origin main --quiet 2>/dev/null
+
+# Commits being pushed that aren't in main
+COMMITS=$(git log origin/main..${LOCAL_SHA} --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
 
 if [ -z "$COMMITS" ]; then
   echo "No new commits vs main — skipping PR creation"
   exit 0
 fi
 
-# Commits only in this push
-PUSH_COMMITS=$(git log origin/develop..HEAD --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
+# Only commits in this push (between old remote sha and new local sha)
+if [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "0000000000000000000000000000000000000000" ]; then
+  PUSH_COMMITS=$(git log ${REMOTE_SHA}..${LOCAL_SHA} --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
+fi
+
 if [ -z "$PUSH_COMMITS" ]; then
   PUSH_COMMITS="$COMMITS"
 fi
