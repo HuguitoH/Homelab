@@ -1,4 +1,45 @@
 services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    ports:
+      - "8181:80"
+    volumes:
+      - /opt/docker/vaultwarden:/data
+    environment:
+      - WEBSOCKET_ENABLED=true
+      - SIGNUPS_ALLOWED=false
+
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8082:80"
+    volumes:
+      - /opt/docker/pihole/etc:/etc/pihole
+      - /opt/docker/pihole/dnsmasq:/etc/dnsmasq.d
+    environment:
+      - TZ=Europe/Madrid
+      - WEBPASSWORD=${PIHOLE_PASSWORD}
+    cap_add:
+      - NET_ADMIN
+
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    volumes:
+      - /opt/docker/homepage:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - HOMEPAGE_ALLOWED_HOSTS=homepage.hugohhm.dev
+
   ntfy:
     image: binwiederhier/ntfy:latest
     container_name: ntfy
