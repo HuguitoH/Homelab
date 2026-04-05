@@ -15,23 +15,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Create PR — ignore error if already exists
-          gh pr create \
+          # Try to create PR and capture the URL
+          PR_URL=$(gh pr create \
             --base main \
             --head develop \
             --title "chore: sync develop → main" \
             --body "Automated PR — triggered by push to develop." \
-            2>/dev/null || true
+            2>&1) || true
 
-          # Wait for GitHub to register the PR
-          sleep 5
+          echo "PR URL or message: $PR_URL"
 
-          # Get PR number and enable auto-merge
-          PR_NUMBER=$(gh pr list --head develop --base main --state open --json number --jq '.[0].number')
-          
+          # If PR already exists, extract URL from error message
+          if echo "$PR_URL" | grep -q "already exists"; then
+            PR_URL=$(echo "$PR_URL" | grep -o 'https://github.com[^ ]*')
+          fi
+
+          # Get PR number from URL
+          PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
+          echo "PR number: $PR_NUMBER"
+
           if [ -n "$PR_NUMBER" ]; then
-            echo "Enabling auto-merge on PR #$PR_NUMBER"
             gh pr merge $PR_NUMBER --auto --squash --delete-branch=false
+            echo "Auto-merge enabled on PR #$PR_NUMBER"
           else
-            echo "No open PR found — may already be merged"
+            echo "Could not determine PR number"
           fi
