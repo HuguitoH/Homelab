@@ -7,11 +7,16 @@ if [ "$BRANCH" != "develop" ]; then
   exit 0
 fi
 
+MERGE_BASE=$(git merge-base HEAD origin/main)
+
 # Fetch latest main before comparing
 git fetch origin main --quiet 2>/dev/null
 
 # Commits not yet in main — filter merge commits
-COMMITS=$(git log origin/main..HEAD --pretty=format:"- %s" --no-merges | grep -v "sync develop → main")
+COMMITS=$(git log $MERGE_BASE..HEAD --pretty=format:"- %s" --no-merges | grep -v "sync develop → main")
+echo "DEBUG COMMITS: '$COMMITS'"
+echo "DEBUG length: ${#COMMITS}"
+
 
 if [ -z "$COMMITS" ]; then
   echo "No new commits vs main — skipping PR creation"
