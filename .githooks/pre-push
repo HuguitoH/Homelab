@@ -7,25 +7,27 @@ if [ "$BRANCH" != "develop" ]; then
   exit 0
 fi
 
-# Git passes push info via stdin: local_ref local_sha remote_ref remote_sha
+# Read push refs from stdin
 read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA
 
-# If remote sha is all zeros, it's a new branch
-if [ "$REMOTE_SHA" = "0000000000000000000000000000000000000000" ]; then
-  REMOTE_SHA=$(git rev-parse origin/main 2>/dev/null || echo "")
+LAST_PR_SHA_FILE="$(git rev-parse --show-toplevel)/.last-pr-sha"
+
+# Get the base to compare against
+if [ -f "$LAST_PR_SHA_FILE" ]; then
+  BASE_SHA=$(cat "$LAST_PR_SHA_FILE")
+else
+  BASE_SHA=$(git rev-parse origin/main 2>/dev/null)
 fi
 
-git fetch origin main --quiet 2>/dev/null
-
-# Commits being pushed that aren't in main
-COMMITS=$(git log origin/main..${LOCAL_SHA} --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
+# Commits since last PR
+COMMITS=$(git log ${BASE_SHA}..${LOCAL_SHA} --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
 
 if [ -z "$COMMITS" ]; then
-  echo "No new commits vs main — skipping PR creation"
+  echo "No new commits since last PR — skipping PR creation"
   exit 0
 fi
 
-# Only commits in this push (between old remote sha and new local sha)
+# Commits only in this push
 if [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "0000000000000000000000000000000000000000" ]; then
   PUSH_COMMITS=$(git log ${REMOTE_SHA}..${LOCAL_SHA} --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
 fi
@@ -112,6 +114,9 @@ PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
 if [ -n "$PR_NUMBER" ]; then
   gh pr merge $PR_NUMBER --auto --merge --delete-branch=false
   gum style --foreground 82 "Auto-merge enabled on PR #$PR_NUMBER"
+  # Save current SHA as last PR base
+  echo "$LOCAL_SHA" > "$LAST_PR_SHA_FILE"
+  gum style --foreground 99 "Saved last PR SHA"
 fi
 
 echo ""
