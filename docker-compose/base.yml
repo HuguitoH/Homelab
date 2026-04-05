@@ -8,5 +8,5 @@ services:
       - "443:443"
       - "81:81"
     volumes:
-      - /mnt/hdd/docker/nginx/data:/data
-      - /mnt/hdd/docker/nginx/letsencrypt:/etc/letsencrypt
+      - /opt/docker/nginx/data:/data
+      - /opt/docker/nginx/letsencrypt:/etc/letsencrypt
