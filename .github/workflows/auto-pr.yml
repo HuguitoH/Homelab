@@ -4,6 +4,10 @@ on:
   push:
     branches: [develop]
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   auto-pr:
     runs-on: ubuntu-latest
@@ -15,7 +19,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Try to create PR and capture the URL
           PR_URL=$(gh pr create \
             --base main \
             --head develop \
@@ -23,14 +26,12 @@ jobs:
             --body "Automated PR — triggered by push to develop." \
             2>&1) || true
 
-          echo "PR URL or message: $PR_URL"
+          echo "Result: $PR_URL"
 
-          # If PR already exists, extract URL from error message
           if echo "$PR_URL" | grep -q "already exists"; then
-            PR_URL=$(echo "$PR_URL" | grep -o 'https://github.com[^ ]*')
+            PR_URL=$(gh pr list --head develop --base main --state open --json url --jq '.[0].url')
           fi
 
-          # Get PR number from URL
           PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
           echo "PR number: $PR_NUMBER"
 
