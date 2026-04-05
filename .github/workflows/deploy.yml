@@ -19,9 +19,9 @@ jobs:
 
       - name: Deploy
         run: |
-          docker compose -f docker-compose/base.yml --env-file .env up -d
-          docker compose -f docker-compose/monitoring.yml --env-file .env up -d
-          docker compose -f docker-compose/services.yml --env-file .env up -d
+          docker compose -f docker-compose/base.yml --env-file /home/hugoh/homelab/.env up -d
+          docker compose -f docker-compose/monitoring.yml --env-file /home/hugoh/homelab/.env up -d
+          docker compose -f docker-compose/services.yml --env-file /home/hugoh/homelab/.env up -d
 
       - name: Notify success
         if: success()
