@@ -19,6 +19,7 @@
 
 ## Table of Contents
 
+- [Quick Start](#quick-start)
 - [Hardware](#hardware)
 - [Architecture](#architecture)
 - [Stack](#stack)
@@ -28,6 +29,47 @@
 - [CI/CD Pipeline](#cicd-pipeline)
 - [Repo Structure](#repo-structure)
 - [Phases](#phases)
+
+---
+
+## Quick Start
+
+> [!NOTE]
+> This homelab runs on a Raspberry Pi 5 (ARM64). All Docker images must support `linux/arm64`.
+
+> [!IMPORTANT]
+> The HDD must be formatted as **ext4** for Docker volumes. exFAT does not support Unix permissions — containers will crash on start.
+
+> [!WARNING]
+> Never commit `.env`. It contains secrets. Use `.env.example` as a template.
+
+```bash
+# 1. Clone the repository
+git clone git@github.com:HuguitoH/Homelab.git
+cd homelab
+
+# 2. Create your environment file
+cp .env.example .env
+# Edit .env with your values — see .env.example for reference
+
+# 3. Start base infrastructure (Nginx Proxy Manager)
+docker compose -f docker-compose/base.yml --env-file .env up -d
+
+# 4. Start observability stack
+docker compose -f docker-compose/monitoring.yml --env-file .env up -d
+
+# 5. Start personal services
+docker compose -f docker-compose/services.yml --env-file .env up -d
+```
+
+| Command | Description |
+|---------|-------------|
+| `docker compose -f docker-compose/base.yml --env-file .env up -d` | Start Nginx Proxy Manager |
+| `docker compose -f docker-compose/monitoring.yml --env-file .env up -d` | Start observability stack |
+| `docker compose -f docker-compose/services.yml --env-file .env up -d` | Start personal services |
+| `docker compose -f docker-compose/base.yml --env-file .env down` | Stop a stack |
+| `docker ps` | Check running containers |
+| `docker logs <container>` | View container logs |
 
 ---
 
@@ -43,7 +85,8 @@
 | Network | WiFi 5GHz — Cloudflare Tunnel for external access |
 | OS | Ubuntu Server 24.04.4 LTS |
 
-> **ARM64 constraint:** All Docker images must support `linux/arm64`. Most major images do, but some third-party tools may not. This is a real constraint when selecting services.
+> [!NOTE]
+> ARM64 constraint: not all Docker images support `linux/arm64`. This is a real constraint when selecting services — always check before adding a new one.
 
 ---
 
@@ -141,7 +184,7 @@ flowchart LR
     end
 ```
 
-Cloudflare Tunnel establishes an **outbound-only** connection. No ports need to be opened on the router. This is the only viable solution in a shared flat without router access. Bonus: automatic HTTPS, DDoS protection, and a free wildcard SSL certificate.
+Cloudflare Tunnel establishes an **outbound-only** connection. No ports need to be opened on the router — the only viable solution in a shared flat without router access. Bonus: automatic HTTPS, DDoS protection, and a free wildcard SSL certificate.
 
 ---
 
@@ -178,9 +221,15 @@ flowchart TD
     end
 ```
 
-**exFAT does not support Unix permissions** (chown, chmod, symlinks). Docker containers require ownership changes on their data directories — Prometheus runs as uid 65534, Grafana as uid 472, Loki as uid 10001. All fail on exFAT.
+**exFAT does not support Unix permissions** (chown, chmod, symlinks). Docker containers require ownership changes on their data directories:
 
-**Decision:** All Docker volumes live on the SD card (ext4). The HDD (exFAT) is reserved for heavy data that does not require Unix permissions (Jellyfin media, backups).
+| Container | Required UID |
+|-----------|-------------|
+| Prometheus | 65534 |
+| Grafana | 472 |
+| Loki | 10001 |
+
+All fail silently on exFAT. Docker volumes live on SD card (ext4). HDD reserved for Jellyfin media and backups.
 
 **Planned:** Migration to NVMe SSD (ext4) — eliminates this constraint entirely.
 
@@ -214,14 +263,14 @@ flowchart LR
         P1["System-level time series"]
         P2["Grafana dashboards"]
         P3["Alert rules"]
-        P4["Custom app metrics"]
+        P4["Custom app metrics via /metrics"]
     end
 
     RPi["RPi 5"] --> Beszel
     RPi --> Prom
 ```
 
-Beszel gives a fast visual overview of the server and containers. Prometheus feeds Grafana for detailed time-series dashboards and alerting. They solve different problems — keeping both is intentional.
+Beszel gives a fast visual overview. Prometheus feeds Grafana for detailed time-series analysis and alerting. Different layers, different responsibilities — keeping both is intentional.
 
 ---
 
@@ -250,7 +299,7 @@ Raspberry Pi 5
 │
 ├── SD Card 64GB (ext4)
 │   ├── /                       Ubuntu Server root filesystem
-│   ├── /opt/docker/            ALL Docker data volumes
+│   ├── /opt/docker/            ALL Docker data volumes (ext4 required)
 │   │   ├── nginx/              Nginx PM config + Let's Encrypt certs
 │   │   ├── beszel/             Beszel PocketBase database
 │   │   ├── beszel-agent/       Agent state
@@ -273,11 +322,14 @@ Docker volumes must stay on ext4 (SD card).
 Planned upgrade: NVMe SSD via USB 3.0 enclosure (ext4).
 ```
 
+> [!CAUTION]
+> Do not move Docker volumes to the HDD. exFAT will silently break container startup with `Operation not permitted` errors on `chown`.
+
 ---
 
 ## CI/CD Pipeline
 
-> **v1** — functional baseline. Validates and deploys on push to main.
+> **v1** — validate, deploy, health check, notify.
 
 ```mermaid
 flowchart TD
@@ -286,13 +338,26 @@ flowchart TD
     Checkout --> Validate["Validate Docker Compose files\nbase.yml · monitoring.yml · services.yml"]
     Validate -->|"Invalid config"| FailNotify["Ntfy: Deploy fallido"]
     Validate -->|"All valid"| Deploy["docker compose up -d\nall stacks"]
-    Deploy -->|"Success"| SuccessNotify["Ntfy: Deploy exitoso"]
-    Deploy -->|"Error"| FailNotify
+    Deploy --> Health["Health check\nHTTP probe on all public endpoints"]
+    Health -->|"Any endpoint unreachable"| FailNotify
+    Health -->|"All endpoints respond 200"| SuccessNotify["Ntfy: Deploy exitoso"]
+    Deploy -->|"Compose error"| FailNotify
+```
+
+**Health checks (post-deploy):**
+
+```bash
+curl -sf https://nginx.hugohhm.dev
+curl -sf https://grafana.hugohhm.dev
+curl -sf https://beszel.hugohhm.dev
+curl -sf https://uptime-kuma.hugohhm.dev
+curl -sf https://homepage.hugohhm.dev
+curl -sf https://vaultwarden.hugohhm.dev
+curl -sf https://ntfy.hugohhm.dev
 ```
 
 **Planned for v2:**
-- Post-deploy health check (HTTP probe on all services)
-- Automatic rollback on failure
+- Automatic rollback on health check failure
 - Trivy security scan on Docker images
 - Sandbox environment on `develop` branch
 - Diun for Docker image update notifications
@@ -305,18 +370,20 @@ flowchart TD
 homelab/
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml         # CI/CD pipeline
+│       └── deploy.yml         # CI/CD — validate, deploy, health check, notify
 ├── docker-compose/
 │   ├── base.yml               # Nginx Proxy Manager
 │   ├── monitoring.yml         # Beszel, Prometheus, Grafana, Loki,
 │   │                          # Uptime Kuma, Node Exporter, Glances
 │   └── services.yml           # Pi-hole, Vaultwarden, Homepage, Ntfy
 ├── prometheus/
-│   └── prometheus.yml         # scrape targets config
+│   └── prometheus.yml         # Scrape targets
+│                              # Note: IP hardcoded — Prometheus does not
+│                              # support env var substitution natively
 ├── grafana/
-│   └── dashboards/            # dashboard JSON exports
-├── scripts/                   # backup and maintenance scripts (planned)
-├── .env.example               # required env vars — no values committed
+│   └── dashboards/            # Dashboard JSON exports
+├── scripts/                   # Backup and maintenance scripts (planned)
+├── .env.example               # Required env vars — no values committed
 ├── .gitignore                 # .env always excluded
 └── README.md
 ```
@@ -343,7 +410,7 @@ homelab/
 
 - [x] **Phase 3** — DevOps
   - GitHub Actions self-hosted runner (ARM64, outbound only)
-  - CI/CD pipeline with Compose validation and auto-deploy
+  - CI/CD pipeline — validate + deploy + health check + notify
   - Ntfy self-hosted push notifications
 
 - [x] **Phase 4** — Personal services
