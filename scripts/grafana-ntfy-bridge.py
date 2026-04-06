@@ -13,24 +13,29 @@ class WebhookHandler(BaseHTTPRequestHandler):
             alerts = body.get("alerts", [])
 
             for alert in alerts:
-                name = alert.get("labels", {}).get("alertname", "Alert")
-                summary = alert.get("annotations", {}).get("summary", name)
-                description = alert.get("annotations", {}).get("description", "")
-                alert_status = alert.get("status", "firing")
-                message = f"[{'ALERT' if alert_status == 'firing' else 'OK'}] {summary} - {description}"
-
-                print(f"Sending to Ntfy: {message}")
-
-                req = urllib.request.Request(
-                    NTFY_URL,
-                    data=message.encode("utf-8"),
-                    headers={
-                        "Content-Type": "text/plain",
-                        "User-Agent": "curl/8.5.0"
-                    }
-                )
-                urllib.request.urlopen(req)
-                print("Sent successfully")
+    alert_status = alert.get("status", "firing")
+    
+    # Solo enviar cuando hay alerta, ignorar resolved
+    if alert_status != "firing":
+        continue
+        
+    name = alert.get("labels", {}).get("alertname", "Alert")
+    summary = alert.get("annotations", {}).get("summary", name)
+    description = alert.get("annotations", {}).get("description", "")
+    message = f"[ALERT] {summary} - {description}"
+    
+    print(f"Sending to Ntfy: {message}")
+    
+    req = urllib.request.Request(
+        NTFY_URL,
+        data=message.encode("utf-8"),
+        headers={
+            "Content-Type": "text/plain",
+            "User-Agent": "curl/8.5.0"
+        }
+    )
+    urllib.request.urlopen(req)
+    print("Sent successfully")
 
         except Exception as e:
             print(f"Error: {e}")
