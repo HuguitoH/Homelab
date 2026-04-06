@@ -10,5 +10,7 @@ jobs:
     steps:
       - name: Update last-pr-sha
         run: |
-          git -C /home/hugoh/homelab rev-parse origin/main > /home/hugoh/homelab/.last-pr-sha
-          echo "Updated .last-pr-sha to $(cat /home/hugoh/homelab/.last-pr-sha)"
+          git -C /home/hugoh/homelab fetch origin main --quiet
+          SHA=$(git -C /home/hugoh/homelab rev-parse origin/main)
+          echo $SHA > /home/hugoh/homelab/.last-pr-sha
+          echo "Updated .last-pr-sha to $SHA"
