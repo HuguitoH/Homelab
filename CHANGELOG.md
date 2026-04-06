@@ -23,3 +23,25 @@ All notable changes to this project will be documented here.
 - Vaultwarden self-hosted password manager
 - Homepage dashboard with live widgets and Docker status
 - Homepage credentials via HOMEPAGE_VAR_* environment variables
+
+
+## [v1.1.0] — 2026-04-06
+
+### Added
+- Cloudflare Access protecting Grafana and Prometheus
+- SSH key authentication
+- cAdvisor Docker metrics + custom Grafana dashboard
+- Diun Docker image update notifications
+- Grafana alerts (temperature, disk, containers)
+- Grafana → Ntfy webhook bridge (clean notifications)
+- Loki dashboard in Grafana
+- SSHGuard with local network whitelist
+- Vaultwarden automated backup (every 15 days)
+- SSH via Cloudflare Tunnel
+- Pre-push hook with gum interactive form
+- Auto-PR workflow with auto-merge
+- sync-last-pr-sha workflow
+
+### Fixed
+- Homepage widget credentials via HOMEPAGE_VAR_*
+- Docker Compose --env-file absolute path in CI/CD
