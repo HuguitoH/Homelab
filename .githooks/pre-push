@@ -8,26 +8,20 @@ if [ "$BRANCH" != "develop" ]; then
 fi
 
 # Read push refs from stdin
-# Read push refs from stdin
-read LOCAL_REF LOCAL_SHA_STDIN REMOTE_REF REMOTE_SHA
+read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA
 
-# Use HEAD as LOCAL_SHA (stdin may be consumed by gum)
-LOCAL_SHA=$(git rev-parse HEAD)
-if [ -z "$REMOTE_SHA" ]; then
-  REMOTE_SHA=$REMOTE_SHA_STDIN
-fi
-
+# Use last-pr-sha if exists, otherwise origin/main
 LAST_PR_SHA_FILE="$(git rev-parse --show-toplevel)/.last-pr-sha"
 
-# Get the base to compare against
 if [ -f "$LAST_PR_SHA_FILE" ]; then
   BASE_SHA=$(cat "$LAST_PR_SHA_FILE")
 else
   BASE_SHA=$(git rev-parse origin/main 2>/dev/null)
 fi
 
-# Commits since last PR
 COMMITS=$(git log ${BASE_SHA}..${LOCAL_SHA} --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
+
+
 
 if [ -z "$COMMITS" ]; then
   echo "No new commits since last PR — skipping PR creation"
