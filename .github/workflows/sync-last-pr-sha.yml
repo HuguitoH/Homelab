@@ -1,0 +1,14 @@
+name: Sync last PR SHA
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    runs-on: self-hosted
+    steps:
+      - name: Update last-pr-sha
+        run: |
+          git -C /home/hugoh/homelab rev-parse HEAD > /home/hugoh/homelab/.last-pr-sha
+          echo "Updated .last-pr-sha to $(cat /home/hugoh/homelab/.last-pr-sha)"
