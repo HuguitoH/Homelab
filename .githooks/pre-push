@@ -1,124 +1,136 @@
 #!/bin/bash
+# pre-push hook — orchestrates PR creation for develop → main
+# Delegates commit detection to GitHub CLI (single source of truth)
 
 export PATH="/usr/bin:/usr/local/bin:$PATH"
 
-BRANCH=$(git branch --show-current)
-if [ "$BRANCH" != "develop" ]; then
-  exit 0
-fi
 
-# Read push refs from stdin
-read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA
-
-# Use last-pr-sha if exists, otherwise origin/main
-LAST_PR_SHA_FILE="$(git rev-parse --show-toplevel)/.last-pr-sha"
-
-if [ -f "$LAST_PR_SHA_FILE" ]; then
-  BASE_SHA=$(cat "$LAST_PR_SHA_FILE")
-else
-  BASE_SHA=$(git rev-parse origin/main 2>/dev/null)
-fi
-
-COMMITS=$(git log ${BASE_SHA}..${LOCAL_SHA} --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
+# Guard: only run on develop branch
+is_develop_branch() {
+  [ "$(git branch --show-current)" = "develop" ]
+}
 
 
+# UI: show header with branch info
+show_header() {
+  echo ""
+  gum style \
+    --border rounded \
+    --border-foreground 99 \
+    --padding "1 2" \
+    --margin "1 0" \
+    "Creating PR: develop → main"
+}
 
-if [ -z "$COMMITS" ]; then
-  echo "No new commits since last PR — skipping PR creation"
-  exit 0
-fi
 
-# Commits only in this push
-if [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "0000000000000000000000000000000000000000" ]; then
-  PUSH_COMMITS=$(git log ${REMOTE_SHA}..${LOCAL_SHA} --pretty=format:"- %s" --no-merges 2>/dev/null | grep -v "sync develop → main" | grep -v "^- Merge ")
-fi
+# UI: collect PR metadata from user
+# Returns: TYPE, TITLE, WHAT, WHY via globals
+collect_pr_metadata() {
+  TYPE=$(gum choose \
+    --header "Type of change:" \
+    "feat — new feature" \
+    "fix — bug fix" \
+    "chore — maintenance" \
+    "docs — documentation" \
+    "refactor — code refactor")
+  TYPE=$(echo "$TYPE" | cut -d' ' -f1)
 
-if [ -z "$PUSH_COMMITS" ]; then
-  PUSH_COMMITS="$COMMITS"
-fi
+  TITLE=$(gum input \
+    --placeholder "PR title..." \
+    --prompt "$TYPE: ")
 
-echo ""
-gum style \
-  --border rounded \
-  --border-foreground 99 \
-  --padding "1 2" \
-  --margin "1 0" \
-  "Creating PR: develop → main"
+  WHAT=$(gum write \
+    --placeholder "What changed? (Ctrl+D when done)" \
+    --header "What changed:")
 
-echo "Commits in this push:"
-echo "$PUSH_COMMITS"
-echo ""
+  WHY=$(gum input \
+    --placeholder "Why this change?" \
+    --prompt "> ")
+}
 
-TYPE=$(gum choose \
-  --header "Type of change:" \
-  "feat — new feature" \
-  "fix — bug fix" \
-  "chore — maintenance" \
-  "docs — documentation" \
-  "refactor — code refactor")
 
-TYPE=$(echo "$TYPE" | cut -d' ' -f1)
+# UI: show PR preview and ask for confirmation
+confirm_pr() {
+  local body="$1"
+  echo ""
+  gum style \
+    --border rounded \
+    --border-foreground 212 \
+    --padding "1 2" \
+    "$(echo -e "Title: $TYPE: $TITLE\n\n$body")"
+  echo ""
+  gum confirm "Create PR and push?"
+}
 
-TITLE=$(gum input \
-  --placeholder "PR title..." \
-  --prompt "$TYPE: ")
+# ─────────────────────────────────────────
+# Core: create PR via GitHub CLI
+# GitHub CLI is the single source of truth for commit detection.
+# If there are no commits between develop and main, gh pr create
+# returns "No commits between" and we exit cleanly.
+# ─────────────────────────────────────────
+create_pr() {
+  local body="$1"
 
-WHAT=$(gum write \
-  --placeholder "What changed? (Ctrl+D when done)" \
-  --header "What changed:")
+  PR_URL=$(gh pr create \
+    --base main \
+    --head develop \
+    --title "$TYPE: $TITLE" \
+    --body "$body" 2>&1) || true
 
-WHY=$(gum input \
-  --placeholder "Why this change?" \
-  --prompt "> ")
+  if echo "$PR_URL" | grep -q "No commits between"; then
+    gum style --foreground 214 "No new commits vs main — nothing to PR"
+    return 1
+  fi
 
-BODY="## What
+  if echo "$PR_URL" | grep -q "already exists"; then
+    gum style --foreground 214 "PR already exists — enabling auto-merge"
+    PR_URL=$(gh pr list --head develop --base main --state open --json url --jq '.[0].url')
+  fi
+
+  echo "$PR_URL"
+  return 0
+}
+
+
+# Core: enable auto-merge on PR
+# Uses rebase to keep linear history — no merge commits
+enable_auto_merge() {
+  local pr_url="$1"
+  local pr_number
+  pr_number=$(echo "$pr_url" | grep -o '[0-9]*$')
+
+  if [ -n "$pr_number" ]; then
+    gh pr merge "$pr_number" --auto --rebase --delete-branch=false
+    gum style --foreground 82 "PR: $pr_url"
+    gum style --foreground 82 "Auto-merge enabled on PR #$pr_number"
+  fi
+}
+
+
+# Orchestrator
+main() {
+  is_develop_branch || exit 0
+
+  show_header
+  collect_pr_metadata
+
+  local body
+  body="## What
 $WHAT
 
 ## Why
 $WHY
 
-## Commits
-$PUSH_COMMITS
-
 ---
 *Auto-created by pre-push hook*"
 
-echo ""
-gum style \
-  --border rounded \
-  --border-foreground 212 \
-  --padding "1 2" \
-  "$(echo -e "Title: $TYPE: $TITLE\n\n$BODY")"
-echo ""
+  confirm_pr "$body" || exit 1
 
-gum confirm "Create PR and push?" || exit 1
+  local pr_url
+  pr_url=$(create_pr "$body") || exit 0
 
-PR_URL=$(gh pr create \
-  --base main \
-  --head develop \
-  --title "$TYPE: $TITLE" \
-  --body "$BODY" 2>&1) || true
+  enable_auto_merge "$pr_url"
+  echo ""
+}
 
-if echo "$PR_URL" | grep -q "already exists"; then
-  gum style --foreground 214 "PR already exists — updating auto-merge"
-  PR_URL=$(gh pr list --head develop --base main --state open --json url --jq '.[0].url')
-fi
-
-if echo "$PR_URL" | grep -q "No commits between"; then
-  gum style --foreground 214 "No new commits vs main — skipping PR"
-  exit 0
-fi
-
-gum style --foreground 82 "PR: $PR_URL"
-
-PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
-if [ -n "$PR_NUMBER" ]; then
-  gh pr merge $PR_NUMBER --auto --merge --delete-branch=false
-  gum style --foreground 82 "Auto-merge enabled on PR #$PR_NUMBER"
-  # Save current SHA as last PR base
-  echo "$LOCAL_SHA" > "$LAST_PR_SHA_FILE"
-  gum style --foreground 99 "Saved last PR SHA"
-fi
-
-echo ""
-exit 0
+main
